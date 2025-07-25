@@ -11,7 +11,8 @@ import re
 # Google Calendar API setup
 SCOPES = ["https://www.googleapis.com/auth/calendar"]
 
-# openbible.com book number, stepbible.org book abbreviation, openbible.com book abbreviation
+# [openbible.com book number, stepbible.org book abbreviation, openbible.com book abbreviation]
+# NOTE: Additional abbreviations may be added if you decide to use a different Bible app for text or audio links
 BOOK_MAPPINGS = {
     "genesis": [1, "Gen", "Gen"],
     "exodus": [2, "Exod", "Exo"],
@@ -95,6 +96,7 @@ def authenticate_google_calendar():
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
+            # update file path to your secret.json file
             flow = InstalledAppFlow.from_client_secrets_file("daily-bible-calendar\secret.json", SCOPES)
             creds = flow.run_local_server(port=0)
 
@@ -104,11 +106,17 @@ def authenticate_google_calendar():
 
     return build("calendar", "v3", credentials=creds)
 
-# Formats a Book/Chapter(s) link for stepbible.org
+# Formats a Book/Chapter(s) link for Berean Standard Bible on stepbible.org
 def format_bible_link(book, sc, ec):
     book_clean = book.strip().replace(" ", "")
     book_formatted = BOOK_MAPPINGS.get(book_clean.lower())
 
+    # if a differnt Bible version is preferred, change the URL accordingly
+    # Example: https://www.stepbible.org/?q=version=ESV@reference{book_formatted[1]}.{sc}-{ec}&options=VHNUG
+
+    # if a different Bible app is preferred, change the URL accordingly
+    # Example: https://www.bible.com/bible/59/{book_formatted[2]}.{sc}
+    # NOTE: bible.com only supports single chapters, so if a range is provided, it will only link to the starting chapter unless you have updated the create_calendar_events method to handle ranges
     if(ec != sc):
         return (
             f"Step Bible link for {book} {sc}-{ec}: https://www.stepbible.org/?q=version=BSB@reference={book_formatted[1]}.{sc}-{ec}&options=VHNUG\n\n"
@@ -118,7 +126,7 @@ def format_bible_link(book, sc, ec):
             f"Step Bible link for {book} {sc}: https://www.stepbible.org/?q=version=BSB@reference={book_formatted[1]}.{sc}\n\n"
         )
 
-# Formats a Book/Chapter link for openbible.com/audio/souer/
+# Formats a Book/Chapter link for Berean Standard Bible openbible.com/audio/souer/
 def format_audio_link(book, chapter):
     book_clean = book.strip().replace(" ", "").lower()
     book_formatted = BOOK_MAPPINGS.get(book_clean.lower())
@@ -137,6 +145,10 @@ def format_audio_link(book, chapter):
     book_number = book_formatted[0]
     if book_number < 10:
         book_number = f"0{book_number}"
+
+    # if a different Bible version is preferred, change the URL accordingly
+    # Example: https://www.bible.com/audio-bible/59/{book_formatted[2]}.{audio_chapter}.ESV
+    # NOTE: book_formatted[2] is the openbible.com book abbreviation, you may have to add to the BOOK_MAPPINGS dictionary if you decide to use a different Bible version book_formatted[3] 
     return (
         f"Audio link for {book} {chapter}: https://www.openbible.com/audio/souer/BSB_{book_number}_{book_formatted[2]}_{audio_chapter}.mp3\n"
     )
@@ -147,7 +159,7 @@ def parse_excel_file(file_path):
         # Read Excel file
         df = pd.read_excel(file_path)
 
-        # Expected columns: Date, Book, Chapter, Title (optional)
+        # Expected columns
         required_columns = ["Date", "OT", "OTSC", "OTEC", "NT", "NTSC", "NTEC", "PS", "PR"]
 
         # Check if required columns exist
@@ -171,7 +183,6 @@ def parse_excel_file(file_path):
 
 
 def create_calendar_event(service, event_data, day, calendar_id="primary"):
-    """Create a single calendar event"""
 
     date = event_data["Date"]
     ot_book = event_data["OT"]
@@ -186,12 +197,12 @@ def create_calendar_event(service, event_data, day, calendar_id="primary"):
     # Create StepBible link
     step_bible_ot_link = ""
     print(f"Processing OT: {ot_book} {ot_starting_chapter}-{ot_ending_chapter}")
-    if ot_book != "None" and ot_starting_chapter != 0:
+    if ot_starting_chapter != 0:
         step_bible_ot_link = format_bible_link(ot_book, ot_starting_chapter, ot_ending_chapter)
     
     step_bible_nt_link = ""
     print(f"Processing NT: {nt_book} {nt_starting_chapter}-{nt_ending_chapter}")
-    if nt_book != "None" and nt_starting_chapter != 0:
+    if nt_starting_chapter != 0:
         step_bible_nt_link = format_bible_link(nt_book, nt_starting_chapter, nt_ending_chapter)
 
     psalm_or_proverb_link = ""
@@ -203,10 +214,10 @@ def create_calendar_event(service, event_data, day, calendar_id="primary"):
     # Create audio links
     ot_audio_links = ""
     nt_audio_links = ""
-    if ot_book != "None" and ot_ending_chapter > ot_starting_chapter:
+    if ot_ending_chapter > ot_starting_chapter:
         for chapter in range(ot_starting_chapter, ot_ending_chapter + 1):
             ot_audio_links += format_audio_link(ot_book, chapter)
-    elif ot_book != "None" and ot_starting_chapter != 0:
+    elif ot_starting_chapter != 0:
         ot_audio_links = format_audio_link(ot_book, ot_starting_chapter)
     if nt_book != "None" and nt_ending_chapter > nt_starting_chapter:
         for chapter in range(nt_starting_chapter, nt_ending_chapter + 1):
@@ -225,7 +236,7 @@ def create_calendar_event(service, event_data, day, calendar_id="primary"):
     # Avoid hitting API rate limits     
     time.sleep(0.5)  
     
-    # Format event
+    # Format calendar event
     event = {
         "summary": f"Bible Reading Day {day}",
         "description": f"{step_bible_ot_link}{ot_audio_links}\n{step_bible_nt_link}{nt_audio_links}\n{psalm_or_proverb_link}{psalm_or_proverb_audio_link}",
@@ -259,9 +270,11 @@ def create_calendar_event(service, event_data, day, calendar_id="primary"):
 
 
 def main():
-    # Configuration
-    excel_file_path = "daily-bible-calendar\\2025 Bible Reading Plan.xlsx"  # Update with your file path
-    calendar_id = "primary"  # Use 'primary' for main calendar or specific calendar ID
+    # update the file path to your Excel file
+    excel_file_path = "daily-bible-calendar\\2025 Bible Reading Plan.xlsx"
+
+    # Use 'primary' for main calendar or specific calendar ID
+    calendar_id = "primary"  
 
     print("Starting Bible Reading Calendar Creator...")
 
@@ -272,7 +285,7 @@ def main():
     if df is None:
         print("Failed to parse Excel file. Please check the file format.")
         return
-    print(df.head())
+    
     if len(df) == 0:
         print("No reading entries found in the Excel file.")
         return
