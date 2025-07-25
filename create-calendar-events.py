@@ -1,3 +1,4 @@
+import time
 import pandas as pd
 from datetime import datetime, timedelta
 from google.auth.transport.requests import Request
@@ -110,11 +111,11 @@ def format_bible_link(book, sc, ec):
 
     if(ec != sc):
         return (
-            f"Step Bible link for {book} {sc}-{ec}: https://www.stepbible.org/?q=version=BSB|reference={book_formatted[1]}.{sc}-{ec}\n\n"
+            f"Step Bible link for {book} {sc}-{ec}: https://www.stepbible.org/?q=version=BSB@reference={book_formatted[1]}.{sc}-{ec}&options=VHNUG\n\n"
         )
     else:
         return (
-            f"Step Bible link for {book} {sc}: https://www.stepbible.org/?q=version=BSB|reference={book_formatted[1]}.{sc}\n\n"
+            f"Step Bible link for {book} {sc}: https://www.stepbible.org/?q=version=BSB@reference={book_formatted[1]}.{sc}\n\n"
         )
 
 # Formats a Book/Chapter link for openbible.com/audio/souer/
@@ -215,10 +216,15 @@ def create_calendar_event(service, event_data, day, calendar_id="primary"):
     
     psalm_or_proverb_audio_link = ""
     if psalm != 0:
+        print(f"Processing Psalm: {psalm}")
         psalm_or_proverb_audio_link = format_audio_link("Psalms", psalm)
     elif proverb != 0:
+        print(f"Processing Proverb: {proverb}")
         psalm_or_proverb_audio_link = format_audio_link("Proverbs", proverb)
 
+    # Avoid hitting API rate limits     
+    time.sleep(0.5)  
+    
     # Format event
     event = {
         "summary": f"Bible Reading Day {day}",
@@ -291,7 +297,7 @@ def main():
     successful_events = 0
 
     for index, row in df.iterrows():
-        event_created = create_calendar_event(service, row, index + 34, calendar_id)
+        event_created = create_calendar_event(service, row, index + 1, calendar_id)
         if event_created:
             successful_events += 1
 
