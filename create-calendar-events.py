@@ -87,7 +87,7 @@ def parse_excel_file(file_path):
         df = pd.read_excel(file_path)
 
         # Expected columns
-        required_columns = ["Date", "OT", "OTSC", "OTEC", "NT", "NTSC", "NTEC", "PS", "PR"]
+        required_columns = ["Date","Book","SC","EC", "PS", "PR"]
 
         # Check if required columns exist
         missing_columns = [col for col in required_columns if col not in df.columns]
@@ -109,64 +109,48 @@ def parse_excel_file(file_path):
         return None
 
 
-def create_calendar_event(service, event_data, day, calendar_id="primary"):
+def create_calendar_event(service, event_data, day, calendar_id="Colum-Buss Family"):
 
     date = event_data["Date"]
-    ot_book = event_data["OT"]
-    ot_starting_chapter = event_data["OTSC"]
-    ot_ending_chapter = event_data["OTEC"]
-    nt_book = event_data["NT"]
-    nt_starting_chapter = event_data["NTSC"]
-    nt_ending_chapter = event_data["NTEC"]
-    psalm = event_data["PS"]
-    proverb = event_data["PR"]
+    book = event_data["Book"]
+    sc = int(event_data["SC"])
+    ec = int(event_data["EC"])
+    psalm = int(event_data["PS"])
+    proverb = int(event_data["PR"])
 
-    # Create StepBible link
-    step_bible_ot_link = ""
-    print(f"Processing OT: {ot_book} {ot_starting_chapter}-{ot_ending_chapter}")
-    if ot_starting_chapter != 0:
-        step_bible_ot_link = format_bible_link(ot_book, ot_starting_chapter, ot_ending_chapter)
-    
-    step_bible_nt_link = ""
-    print(f"Processing NT: {nt_book} {nt_starting_chapter}-{nt_ending_chapter}")
-    if nt_starting_chapter != 0:
-        step_bible_nt_link = format_bible_link(nt_book, nt_starting_chapter, nt_ending_chapter)
+    # Create StepBible link for main reading
+    step_bible_link = ""
+    print(f"Processing: {book} {sc}-{ec}")
+    if sc != 0:
+        step_bible_link = format_bible_link(book, sc, ec)
 
+    # Create audio links for main reading
+    audio_links = ""
+    if ec > sc:
+        for chapter in range(sc, ec + 1):
+            audio_links += format_audio_link(book, chapter)
+    elif sc != 0:
+        audio_links = format_audio_link(book, sc)
+
+    # Psalm/Proverb links
     psalm_or_proverb_link = ""
-    if psalm != 0:
-        psalm_or_proverb_link = format_bible_link("Psalms", psalm, psalm)
-    elif proverb != 0:
-        psalm_or_proverb_link = format_bible_link("Proverbs", proverb, proverb)
-
-    # Create audio links
-    ot_audio_links = ""
-    nt_audio_links = ""
-    if ot_ending_chapter > ot_starting_chapter:
-        for chapter in range(ot_starting_chapter, ot_ending_chapter + 1):
-            ot_audio_links += format_audio_link(ot_book, chapter)
-    elif ot_starting_chapter != 0:
-        ot_audio_links = format_audio_link(ot_book, ot_starting_chapter)
-    if nt_book != "None" and nt_ending_chapter > nt_starting_chapter:
-        for chapter in range(nt_starting_chapter, nt_ending_chapter + 1):
-            nt_audio_links += format_audio_link(nt_book, chapter)
-    elif nt_book != "None" and nt_starting_chapter != 0:
-        nt_audio_links = format_audio_link(nt_book, nt_starting_chapter)
-    
     psalm_or_proverb_audio_link = ""
     if psalm != 0:
+        psalm_or_proverb_link = format_bible_link("Psalms", psalm, psalm)
         print(f"Processing Psalm: {psalm}")
         psalm_or_proverb_audio_link = format_audio_link("Psalms", psalm)
     elif proverb != 0:
+        psalm_or_proverb_link = format_bible_link("Proverbs", proverb, proverb)
         print(f"Processing Proverb: {proverb}")
         psalm_or_proverb_audio_link = format_audio_link("Proverbs", proverb)
 
     # Avoid hitting API rate limits     
-    time.sleep(0.5)  
-    
+    time.sleep(1)  
+
     # Format calendar event
     event = {
         "summary": f"Bible Reading Day {day}",
-        "description": f"{step_bible_ot_link}{ot_audio_links}\n{step_bible_nt_link}{nt_audio_links}\n{psalm_or_proverb_link}{psalm_or_proverb_audio_link}",
+        "description": f"{step_bible_link}{audio_links}\n{psalm_or_proverb_link}{psalm_or_proverb_audio_link}",
         "start": {
             "date": date.strftime("%Y-%m-%d"),
             "time": "06:00:00",  # Set a default time, adjust as needed
@@ -198,10 +182,10 @@ def create_calendar_event(service, event_data, day, calendar_id="primary"):
 
 def main():
     # update the file path to your Excel file
-    excel_file_path = "daily-bible-calendar\\2025 Bible Reading Plan.xlsx"
+    excel_file_path = "daily-bible-calendar/2026_Bible_Reading_Plan.xlsx"
 
     # Use 'primary' for main calendar or specific calendar ID
-    calendar_id = "primary"  
+    calendar_id = "Colum-Buss Family"  
 
     print("Starting Bible Reading Calendar Creator...")
 
